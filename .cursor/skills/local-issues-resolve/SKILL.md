@@ -45,6 +45,38 @@ Resolve local performance/stability issues fast, with minimal risky changes and 
    - identify top hard-pagefault process and test without it
    - disable only non-essential startup items first
 
+## MSI/Skydimo Game Mode Automation
+- Prefer a paired `on/off` script flow for repeatability.
+- Keep `SkyDimo.exe` running during gaming if user requests it.
+- For MSI Center on modern builds, include UWP process names:
+  - `DCv2.exe`
+  - `MysticLightController.exe`
+  - plus common MSI helpers/services (`MSI_Central_Service.exe`, `MSI_Case_Service.exe`, `MSI.CentralServer.exe`).
+- For AMD installer manager handling, include both names:
+  - `AMDInstallManager.exe`
+  - `AMDRM_InstallManager.exe`
+
+### On Script Pattern
+1. Save process restore state to `%TEMP%\cs2_game_mode_state.txt`.
+2. Stop MSI services first (`MSI_Center_Service`, `MSI_Case_Service`).
+3. Kill targeted MSI/UWP helper processes in two passes (with 1-second delay).
+4. Kill user-requested background apps (Perplexity/Codex/Telegram/AnyDesk/AMD manager).
+5. Do not kill `SkyDimo.exe` if user asked to keep it alive.
+
+### Off Script Pattern
+1. Start MSI services again.
+2. Start MSI Center UWP explicitly via:
+   - `shell:AppsFolder\9426MICRO-STARINTERNATION.MSICenter_kzh8wxbdkxb8p!App`
+3. Start standalone Skydimo from explicit path if present:
+   - `C:\Program Files (x86)\Skydimo\SkyDimo.exe --auto_startup`
+4. Restore only apps recorded in `%TEMP%\cs2_game_mode_state.txt` (state-aware restore).
+5. Avoid directly launching backend service executables that can leave a hanging black console.
+
+### Validation
+- After `on`: verify target processes are absent.
+- After `off`: verify expected restored apps are present.
+- If a process persists, capture exact process name/path and update script by concrete executable name.
+
 ## Communication Style
 - Report facts first: what logs show, not assumptions.
 - Separate:
