@@ -1,0 +1,4 @@
+interface:
+  display_name: "Local Issues Resolve"
+  short_description: "Diagnose Windows gaming stutter and performance issues safely"
+  default_prompt: "Troubleshoot this local Windows gaming or performance issue using an evidence-first workflow. Start by confirming the symptom scope, then analyze available PresentMon or LatencyMon artifacts, identify whether spikes look CPU-side or GPU-side, and recommend only small reversible changes with explicit rollback steps."

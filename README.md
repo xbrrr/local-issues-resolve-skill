@@ -1,8 +1,13 @@
 # local-issues-resolve-skill
 
-Project skill for troubleshooting local Windows performance and game stutter issues.
+Codex-native project skill for troubleshooting local Windows performance and game stutter issues.
 
-Skill path:
+Primary skill files:
+
+- `SKILL.md`
+- `agents/openai.yaml`
+
+Legacy Cursor copy retained during transition:
 
 - `.cursor/skills/local-issues-resolve/SKILL.md`
 
