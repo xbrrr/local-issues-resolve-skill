@@ -1,60 +1,94 @@
 ---
 name: local-issues-resolve
-description: Troubleshoot local Windows gaming/performance issues with evidence-first diagnostics and safe rollback steps. Use when the user reports stutters, freezes, driver latency issues, PresentMon/LatencyMon logs, or asks to optimize local system behavior.
+description: Troubleshoot local Windows gaming, media-server, and performance issues with evidence-first diagnostics and safe rollback steps. Use when the user reports stutters, freezes, frametime spikes, driver latency issues, hard pagefault bursts, PresentMon or LatencyMon logs, RGB or idle-power behavior, Plex-style 24/7 availability, remote access, or asks to optimize local system behavior without risky blind tweaks.
 ---
 # Local Issues Resolve
 
 ## Goal
-Resolve local performance/stability issues fast, with minimal risky changes and clear rollback points.
+Resolve local performance and stability issues quickly with minimal-risk changes, measurable before and after checks, and explicit rollback points.
+
+## Quick Start
+1. Confirm the symptom scope and ask for the smallest reproducible test.
+2. Gather evidence before tuning. Prefer existing `PresentMon`, `LatencyMon`, Event Viewer, or game config artifacts over guesswork.
+3. Classify the issue before changing anything:
+   - burst frametime spikes with good averages
+   - sustained CPU saturation
+   - sustained GPU saturation
+   - DPC or ISR latency
+   - hard pagefault or background contention
+   - profile, overlay, or display-path mismatch
+4. Apply the smallest reversible change first and retest.
+5. Keep only changes that produce measurable improvement.
 
 ## Workflow
 1. Confirm symptom scope:
-   - app/game names
-   - when issue happens (combat/menu/idle)
-   - after which recent changes
+   - app or game name
+   - when the issue happens
+   - what changed recently
+   - whether the issue is new, intermittent, or always reproducible
+   - whether the symptom is gameplay-only, menu-only, shader-compilation-only, or desktop-wide
 2. Gather evidence before tuning:
-   - analyze latest `PresentMon` CSV (frametime percentiles, spike count, spike mode)
-   - read `LatencyMon` summary (top DPC/ISR, hard pagefault leaders)
-   - identify whether spikes are mostly CPU-side (`MsCPUBusy/Wait`) or GPU-side (`MsGPUWait/GPUTime`)
-3. Apply smallest reversible changes first:
+   - analyze the latest `PresentMon` CSV for frametime percentiles, spike count, and spike shape
+   - read the `LatencyMon` summary for top DPC or ISR offenders and hard pagefault leaders
+   - classify spike frames as mostly CPU-side (`MsCPUBusy`, `MsCPUWait`) or GPU-side (`MsGPUWait`, `MsGPUTime`)
+   - compare active in-game settings, account, config profile, display mode, and refresh path before assuming a system regression
+3. Apply the smallest reversible change first:
    - avoid broad system rewrites
    - change one variable at a time
-   - keep account/profile parity when app has multiple profiles
+   - keep account and profile parity when a game has multiple profiles
 4. Re-test and compare:
-   - short match/session test
-   - re-check logs
+   - run a short repeatable session
+   - compare new logs against the prior baseline
    - keep only changes that measurably help
 
 ## Prioritization Rules
-- If frametime baseline is good but rare spikes are huge, treat as burst/driver/background contention.
-- If `MsGPUTime` is low on spike frames and `MsCPUBusy` is high, prioritize CPU/background process isolation.
-- If `MsGPUWait/GPUTime` dominate spikes, prioritize graphics/driver path and rendering load.
-- Treat `PresentMode: Other`/`Composed: Flip` spikes carefully; they can include alt-tab/menu transitions.
+- If baseline frametime is good but rare spikes are huge, treat it as burst, driver, or background contention first.
+- If `MsGPUTime` is low on spike frames and `MsCPUBusy` is high, prioritize CPU scheduling and background isolation.
+- If `MsGPUWait` or `MsGPUTime` dominate spikes, prioritize the graphics path, rendering load, and driver settings.
+- Treat `PresentMode: Other` and `Composed: Flip` spikes carefully because they can include menu or alt-tab transitions.
+- If the stutter started after a driver, BIOS, overlay, or anti-cheat change, verify that timeline before proposing generic tuning.
+- If hard pagefault leaders and storage activity line up with spikes, treat memory pressure or background I/O as primary until disproven.
 
 ## Safe Change Ladder
 1. Session hygiene:
-   - close overlays/recorders/launchers not required for test
-   - ensure true fullscreen path for game
+   - close non-essential overlays, recorders, and launchers
+   - verify the game is using the intended fullscreen path
 2. Game config consistency:
-   - align active profiles/accounts
-   - lock critical values (`fps_max`, display mode, refresh)
-3. Driver/system knobs (reversible):
-   - toggle one setting at a time and document previous value
-   - require admin for HKLM edits; if unavailable, report exact command for user
+   - align the active profile or account
+   - lock critical values such as `fps_max`, display mode, and refresh rate
+3. Driver and system knobs:
+   - toggle one setting at a time
+   - document the previous value before changing it
+   - if admin access is unavailable, report the exact command instead of improvising
 4. Background process isolation:
-   - identify top hard-pagefault process and test without it
-   - disable only non-essential startup items first
+   - identify the top hard-pagefault or CPU offender
+   - test without non-essential startup items first
+
+## 24/7 Media Server And Idle Power
+- For Plex-style hosts, do not use sleep as a power-saving fix unless the user explicitly accepts downtime.
+- Prefer display-off, RGB or LCD off, and an idle power plan that keeps network, disks, and services available.
+- Preserve hardware transcoding behavior: GPU power saving is acceptable at idle, but the GPU must be allowed to wake when media transcoding needs it.
+- Treat port forwarding, router admin changes, SMB credentials, torrent Web UI, and remote-access credentials as sensitive operations. Use placeholders and ask for action-time confirmation before transmitting credentials or opening services to the internet.
+
+## Output Shape
+- Start with `Observed`, `Likely Bottleneck`, `Next Test`, and `Rollback`.
+- Distinguish evidence from inference explicitly.
+- If artifacts are missing, ask only for the minimum next artifact that will meaningfully reduce uncertainty.
+- Prefer a short numbered experiment list over a long tweak dump.
 
 ## Communication Style
-- Report facts first: what logs show, not assumptions.
-- Separate:
-  - what changed
-  - what likely helped
-  - what is still unproven
-- Keep recommendations in short, testable batches.
+- Report facts before theories.
+- Separate what changed, what likely helped, and what is still unproven.
+- Keep recommendations short, reversible, and easy to test.
 
 ## Guardrails
 - Do not claim a fix without before/after evidence.
 - Do not stack many performance tweaks at once.
 - Do not edit unrelated files.
-- Always include rollback instructions for registry/system changes.
+- Always include rollback instructions for registry or system changes.
+
+## References
+- Read [references/intake-template.md](../../../references/intake-template.md) when you need a concise first response or a repeatable evidence request.
+- Read [references/presentmon-latencymon.md](../../../references/presentmon-latencymon.md) when you need interpretation rules for frametime spikes, CPU or GPU attribution, or LatencyMon offender triage.
+- Read [references/change-ladder.md](../../../references/change-ladder.md) when you are choosing the next safe experiment, especially for overlays, drivers, power settings, HAGS, VRR, polling, storage, or startup isolation.
+- Read [references/media-server-idle-remote.md](../../../references/media-server-idle-remote.md) when the task involves Plex-style 24/7 availability, idle power, RGB/LCD-off automation, Wake-on-LAN, router port forwarding, VPN-only admin access, SMB, or remote torrent control.

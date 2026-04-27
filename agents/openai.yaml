@@ -1,4 +1,4 @@
 interface:
   display_name: "Local Issues Resolve"
-  short_description: "Diagnose Windows gaming stutter and performance issues safely"
-  default_prompt: "Troubleshoot this local Windows gaming or performance issue using an evidence-first workflow. Start by confirming the symptom scope, then analyze available PresentMon or LatencyMon artifacts, identify whether spikes look CPU-side or GPU-side, and recommend only small reversible changes with explicit rollback steps."
+  short_description: "Diagnose Windows stutter, idle power, and local server behavior safely"
+  default_prompt: "Troubleshoot this local Windows gaming, media-server, or performance issue with an evidence-first workflow. Confirm the smallest reproducible test, analyze any PresentMon or LatencyMon artifacts when relevant, classify the issue as CPU-side, GPU-side, DPC or ISR, hard-pagefault, profile-path, idle-power, or remote-access related, and recommend only short reversible experiments with explicit rollback steps and before/after comparison."
