@@ -70,6 +70,14 @@ Resolve local performance and stability issues quickly with minimal-risk changes
 - Preserve hardware transcoding behavior: GPU power saving is acceptable at idle, but the GPU must be allowed to wake when media transcoding needs it.
 - Treat port forwarding, router admin changes, SMB credentials, torrent Web UI, and remote-access credentials as sensitive operations. Use placeholders and ask for action-time confirmation before transmitting credentials or opening services to the internet.
 
+## Local Automation Rules
+- For Windows idle automations, separate detection from privileged application:
+  - a user-session watcher may detect idle/display state
+  - a highest-privilege scheduled task should apply HKLM, driver, service, or vendor-app changes
+- Always provide a manual `On` recovery path before enabling unattended `Off` automation.
+- If a vendor RGB app uses synthetic hotkeys, suppress immediate wake detection briefly after `Off`; the hotkey itself can reset the Windows idle timer.
+- Treat app-specific registry state as an integration surface, not proof of hardware state. Verify both stored values and the vendor service or process behavior.
+
 ## Output Shape
 - Start with `Observed`, `Likely Bottleneck`, `Next Test`, and `Rollback`.
 - Distinguish evidence from inference explicitly.
@@ -92,3 +100,6 @@ Resolve local performance and stability issues quickly with minimal-risk changes
 - Read [references/presentmon-latencymon.md](references/presentmon-latencymon.md) when you need interpretation rules for frametime spikes, CPU or GPU attribution, or LatencyMon offender triage.
 - Read [references/change-ladder.md](references/change-ladder.md) when you are choosing the next safe experiment, especially for overlays, drivers, power settings, HAGS, VRR, polling, storage, or startup isolation.
 - Read [references/media-server-idle-remote.md](references/media-server-idle-remote.md) when the task involves Plex-style 24/7 availability, idle power, RGB/LCD-off automation, Wake-on-LAN, router port forwarding, VPN-only admin access, SMB, or remote torrent control.
+- Read [references/rgb-idle-automation.md](references/rgb-idle-automation.md) when the task involves RGB, motherboard lighting, vendor lighting apps, device LCDs, monitor-off automation, scheduled tasks, or restoring lighting after user activity.
+- Read [references/remote-media-networking.md](references/remote-media-networking.md) when the task involves Plex remote access, double NAT, public-IP verification, VPN bypass rules, router forwarding, or validating service reachability.
+- Read [references/windows-startup-power.md](references/windows-startup-power.md) when the task involves Windows autostart cleanup, power-button behavior, display timeout, sleep/hibernate policy, USB selective suspend, or local background services.
