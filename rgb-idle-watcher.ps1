@@ -17,6 +17,7 @@ if (-not $mutex.WaitOne(0)) {
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 public static class IdleTime {
     [StructLayout(LayoutKind.Sequential)]
@@ -33,6 +34,33 @@ public static class IdleTime {
         lii.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(LASTINPUTINFO));
         GetLastInputInfo(ref lii);
         return ((uint)Environment.TickCount - lii.dwTime);
+    }
+
+    [DllImport("user32.dll", SetLastError=true)]
+    private static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
+
+    [DllImport("user32.dll", SetLastError=true)]
+    private static extern bool CloseDesktop(IntPtr hDesktop);
+
+    [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    private static extern bool GetUserObjectInformation(IntPtr hObj, int nIndex, StringBuilder pvInfo, int nLength, ref int lpnLengthNeeded);
+
+    public static string GetInputDesktopName() {
+        IntPtr desktop = OpenInputDesktop(0, false, 1);
+        if (desktop == IntPtr.Zero) {
+            return "";
+        }
+
+        try {
+            int needed = 0;
+            StringBuilder name = new StringBuilder(256);
+            if (GetUserObjectInformation(desktop, 2, name, name.Capacity, ref needed)) {
+                return name.ToString();
+            }
+            return "";
+        } finally {
+            CloseDesktop(desktop);
+        }
     }
 }
 '@
@@ -69,14 +97,21 @@ function Apply-State {
     Set-Content -LiteralPath $statusPath -Value $State -Encoding ASCII
 }
 
+function Test-SessionLocked {
+    $desktopName = [IdleTime]::GetInputDesktopName()
+    return ($desktopName -and $desktopName -ne 'Default')
+}
+
 Write-Log 'RGB Idle Watcher started.'
 $displayIdleSeconds = Get-DisplayIdleSeconds
 if ($displayIdleSeconds -le 0) {
     $displayIdleSeconds = 900
 }
 $idleSeconds = [math]::Floor([IdleTime]::GetIdleMilliseconds() / 1000)
-$lastState = if ($idleSeconds -ge $displayIdleSeconds) { 'Off' } else { 'On' }
-Write-Log "Startup sync: IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds TargetState=$lastState"
+$sessionLocked = Test-SessionLocked
+$lastSessionLocked = $sessionLocked
+$lastState = if ($sessionLocked -or $idleSeconds -ge $displayIdleSeconds) { 'Off' } else { 'On' }
+Write-Log "Startup sync: IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds SessionLocked=$sessionLocked TargetState=$lastState"
 Apply-State -State $lastState -Force
 
 # Some vendor tools are controlled through simulated hotkeys. Those hotkeys reset
@@ -123,18 +158,24 @@ while ($true) {
         }
 
         $idleSeconds = [math]::Floor([IdleTime]::GetIdleMilliseconds() / 1000)
+        $sessionLocked = Test-SessionLocked
+        if ($sessionLocked -ne $lastSessionLocked) {
+            Write-Log "Session lock state changed: Locked=$sessionLocked"
+            $lastSessionLocked = $sessionLocked
+        }
+
         if ($lastState -eq 'Off') {
             if ((Get-Date) -lt $ignoreSyntheticWakeUntil) {
                 $targetState = 'Off'
             } else {
-                $targetState = if ($idleSeconds -le $wakeIdleSeconds) { 'On' } else { 'Off' }
+                $targetState = if ((-not $sessionLocked) -and $idleSeconds -le $wakeIdleSeconds) { 'On' } else { 'Off' }
             }
         } else {
-            $targetState = if ($idleSeconds -ge $displayIdleSeconds) { 'Off' } else { 'On' }
+            $targetState = if ($sessionLocked -or $idleSeconds -ge $displayIdleSeconds) { 'Off' } else { 'On' }
         }
 
         if ($targetState -ne $lastState) {
-            Write-Log "IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds TargetState=$targetState"
+            Write-Log "IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds SessionLocked=$sessionLocked TargetState=$targetState"
             Apply-State -State $targetState
             $lastState = $targetState
             if ($targetState -eq 'Off') {
@@ -142,7 +183,7 @@ while ($true) {
             }
         }
 
-        if ($idleSeconds -ge $displayIdleSeconds) {
+        if ($sessionLocked -or $idleSeconds -ge $displayIdleSeconds) {
             if (Invoke-DeepCoolOffGuard -IdleSeconds $idleSeconds -DisplayIdleSeconds $displayIdleSeconds) {
                 $lastState = 'Off'
                 $ignoreSyntheticWakeUntil = (Get-Date).AddSeconds(30)
@@ -150,7 +191,7 @@ while ($true) {
         }
 
         if (((Get-Date) - $lastHeartbeat).TotalMinutes -ge 5) {
-            Write-Log "Watcher heartbeat: IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds LastState=$lastState"
+            Write-Log "Watcher heartbeat: IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds SessionLocked=$sessionLocked LastState=$lastState"
             $lastHeartbeat = Get-Date
         }
     } catch {
