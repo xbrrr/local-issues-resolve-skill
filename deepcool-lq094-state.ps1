@@ -141,9 +141,10 @@ if (-not $page) {
 }
 
 $escapedBackupPath = ($backupPath -replace '\\', '\\')
+$stateExpression = $null
 
 if ($State -eq 'Off') {
-    $expression = @"
+    $stateExpression = @"
 (async () => {
   const sn = '$serialNumber';
   const current = await window.ipcRenderer.invoke('LQ094/get-device-info', sn);
@@ -169,7 +170,7 @@ if ($State -eq 'Off') {
 })()
 "@
 } else {
-    $expression = @"
+    $stateExpression = @"
 (async () => {
   const fs = require('fs');
   const sn = '$serialNumber';
@@ -202,12 +203,21 @@ if ($State -eq 'Off') {
 "@
 }
 
-$response = Invoke-DeepCoolCdpExpression -WebSocketUrl $page.webSocketDebuggerUrl -Expression $expression
+$response = Invoke-DeepCoolCdpExpression -WebSocketUrl $page.webSocketDebuggerUrl -Expression $stateExpression
 $value = $response.result.result.value
 Write-Log "DeepCool LQ094 $State response: $value"
 if ($State -eq 'Off') {
     Stop-DeepCoolAppAfterOff
 } else {
+    Start-Sleep -Seconds 8
+    $page = Get-DeepCoolPage
+    if ($page) {
+        $retryResponse = Invoke-DeepCoolCdpExpression -WebSocketUrl $page.webSocketDebuggerUrl -Expression $stateExpression
+        $retryValue = $retryResponse.result.result.value
+        Write-Log "DeepCool LQ094 On delayed retry response: $retryValue"
+    } else {
+        Write-Log 'DeepCool LQ094 On delayed retry skipped: CDP page not available.'
+    }
     Hide-DeepCoolWindowsFor -Seconds 8
     Write-Log 'DeepCool app left running after On to keep the LQ094 panel active.'
 }
