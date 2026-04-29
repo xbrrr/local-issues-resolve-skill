@@ -1,0 +1,9 @@
+*.bak-*
+*.log
+*.reg
+*.sddl
+*.zip
+*.bin
+*.png
+deepcool-asar/
+Palit-ThunderMaster-4.17/
