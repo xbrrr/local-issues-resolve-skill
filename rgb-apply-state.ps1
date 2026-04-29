@@ -22,6 +22,32 @@ $msiUiWorkerScript = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path)
 
 New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
 
+function Write-Log {
+    param([string]$Message)
+    $line = '{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
+    Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
+}
+
+function Set-DisplaysOff {
+    try {
+        $source = @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class MonitorPowerTools {
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+}
+'@
+        Add-Type -TypeDefinition $source -ErrorAction SilentlyContinue
+        $result = [IntPtr]::Zero
+        [void][MonitorPowerTools]::SendMessageTimeout([IntPtr]0xffff, 0x0112, [IntPtr]0xf170, [IntPtr]2, 2, 2000, [ref]$result)
+        Write-Log 'Display power-off command sent to all monitors.'
+    } catch {
+        Write-Log "Display power-off command failed: $($_.Exception.Message)"
+    }
+}
+
 if (-not $ElevatedWorker -and -not (Test-Path -LiteralPath (Join-Path $stateRoot 'disable-elevated-apply.flag'))) {
     $taskName = 'RGB Idle Apply Elevated'
     $stateArgPath = Join-Path $stateRoot 'pending-state.txt'
@@ -49,17 +75,14 @@ if (-not $ElevatedWorker -and -not (Test-Path -LiteralPath (Join-Path $stateRoot
             }
             Start-ScheduledTask -TaskName $taskName
             Start-Sleep -Seconds 2
+            if ($State -eq 'Off') {
+                Set-DisplaysOff
+            }
             return
         }
     } catch {
         # Fall through to the non-elevated path if the task is not installed yet.
     }
-}
-
-function Write-Log {
-    param([string]$Message)
-    $line = '{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
-    Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
 }
 
 function Test-IsAdmin {
@@ -284,4 +307,7 @@ if (-not $ElevatedWorker) {
     Set-SkydimoState -TargetState $State
 } else {
     Write-Log 'Skydimo skipped in elevated worker; user-session worker owns hotkey control.'
+}
+if ($State -eq 'Off' -and -not $ElevatedWorker) {
+    Set-DisplaysOff
 }
