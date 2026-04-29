@@ -83,15 +83,52 @@ function Invoke-AllDeviceApply {
     $type = $device.GetType()
     $type.GetMethod('Init_AllDevice').Invoke($device, @())
     Start-Sleep -Seconds 2
+    $boardGlobalResult = 'not-run'
+    $boardSendResult = 'not-run'
+
+    try {
+        $boardField = $type.GetField('Device_7B10', [Reflection.BindingFlags]'Public,NonPublic,Instance')
+        if ($boardField) {
+            $board = $boardField.GetValue($device)
+            if ($board) {
+                $boardType = $board.GetType()
+                $pidField = $boardType.GetField('PID', [Reflection.BindingFlags]'Public,NonPublic,Instance')
+                $boardPid = [uint16]$pidField.GetValue($board)
+                $boardInitResult = $board.Init($boardPid)
+                $boardGlobalResult = $board.Set_LEDGlobal($TargetState -eq 'On')
+                try {
+                    $boardSendResult = $board.Set_SendLedSetting($true)
+                } catch {
+                    $boardSendResult = $_.Exception.Message
+                }
+                Write-Log "MSI Mystic direct v2 board global target=$TargetState pid=$boardPid init=$boardInitResult global=$boardGlobalResult send=$boardSendResult."
+                Write-Output "Board.Set_LEDGlobal invoked target=$TargetState pid=$boardPid init=$boardInitResult global=$boardGlobalResult send=$boardSendResult"
+            }
+        }
+    } catch {
+        $boardGlobalResult = $_.Exception.Message
+        Write-Log "MSI Mystic direct v2 board global failed: $boardGlobalResult"
+        Write-Output "Board.Set_LEDGlobal failed: $boardGlobalResult"
+    }
 
     if ($TargetState -eq 'Off') {
-        $type.GetMethod('Set_Style_Off').Invoke($device, @())
-        Write-Output 'AllDevice.Set_Style_Off invoked'
-        Write-Log 'MSI Mystic direct v2 invoked AllDevice.Set_Style_Off.'
+        try {
+            $type.GetMethod('Set_Style_Off').Invoke($device, @())
+            Write-Output 'AllDevice.Set_Style_Off invoked'
+            Write-Log 'MSI Mystic direct v2 invoked AllDevice.Set_Style_Off.'
+        } catch {
+            Write-Output "AllDevice.Set_Style_Off failed: $($_.Exception.Message)"
+            Write-Log "MSI Mystic direct v2 Set_Style_Off failed: $($_.Exception.Message)"
+        }
     } else {
-        $type.GetMethod('Set_LED_Static').Invoke($device, @([int]0, $Red, $Green, $Blue))
-        Write-Output "AllDevice.Set_LED_Static invoked index=0 rgb=$Red,$Green,$Blue"
-        Write-Log "MSI Mystic direct v2 invoked AllDevice.Set_LED_Static index=0 rgb=$Red,$Green,$Blue."
+        try {
+            $type.GetMethod('Set_LED_Static').Invoke($device, @([int]0, $Red, $Green, $Blue))
+            Write-Output "AllDevice.Set_LED_Static invoked index=0 rgb=$Red,$Green,$Blue"
+            Write-Log "MSI Mystic direct v2 invoked AllDevice.Set_LED_Static index=0 rgb=$Red,$Green,$Blue."
+        } catch {
+            Write-Output "AllDevice.Set_LED_Static failed: $($_.Exception.Message)"
+            Write-Log "MSI Mystic direct v2 Set_LED_Static failed: $($_.Exception.Message)"
+        }
     }
 
     Start-Sleep -Seconds 1

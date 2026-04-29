@@ -12,11 +12,12 @@ try {
         throw "Worker script not found: $worker"
     }
 
-    $argument = '-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $worker
+    $argument = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $worker
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argument
     $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `
+        -Hidden `
         -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
 
     Register-ScheduledTask `

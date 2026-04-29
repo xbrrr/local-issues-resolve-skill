@@ -36,6 +36,9 @@ using System.Runtime.InteropServices;
 public static class DeepCoolWindowTools {
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
 }
 '@
     Add-Type -TypeDefinition $source -ErrorAction SilentlyContinue
@@ -44,6 +47,7 @@ public static class DeepCoolWindowTools {
         Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } |
         ForEach-Object {
             [void][DeepCoolWindowTools]::ShowWindow($_.MainWindowHandle, 0)
+            [void][DeepCoolWindowTools]::ShowWindowAsync($_.MainWindowHandle, 0)
         }
 }
 
@@ -65,7 +69,7 @@ function Start-DeepCoolWithDebugPort {
 
     Get-Process DeepCool -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Seconds 2
-    Start-Process -FilePath $deepCoolExe -ArgumentList "--remote-debugging-port=$debugPort" -WindowStyle Minimized
+    Start-Process -FilePath $deepCoolExe -ArgumentList "--remote-debugging-port=$debugPort" -WindowStyle Hidden
 
     for ($i = 0; $i -lt 20; $i++) {
         Hide-DeepCoolWindows
@@ -218,6 +222,6 @@ if ($State -eq 'Off') {
     } else {
         Write-Log 'DeepCool LQ094 On delayed retry skipped: CDP page not available.'
     }
-    Hide-DeepCoolWindowsFor -Seconds 8
+    Hide-DeepCoolWindowsFor -Seconds 30
     Write-Log 'DeepCool app left running after On to keep the LQ094 panel active.'
 }

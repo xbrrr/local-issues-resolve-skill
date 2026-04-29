@@ -28,7 +28,7 @@ if (-not $ElevatedWorker -and -not (Test-Path -LiteralPath (Join-Path $stateRoot
     Set-Content -LiteralPath $stateArgPath -Value $State -Encoding ASCII
     try {
         $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-        if ($task) {
+        if ($task -and $task.Actions.Arguments -match 'rgb-apply-elevated-worker\.ps1') {
             Add-Content -LiteralPath $logPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') MSI Mystic Light user-session UI skipped; elevated direct worker owns MSI control." -Encoding UTF8
             if (Test-Path -LiteralPath $skydimoScript) {
                 try {
@@ -40,9 +40,11 @@ if (-not $ElevatedWorker -and -not (Test-Path -LiteralPath (Join-Path $stateRoot
             Start-ScheduledTask -TaskName $taskName
             Start-Sleep -Seconds 2
             return
+        } elseif ($task) {
+            Add-Content -LiteralPath $logPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Elevated task ignored: invalid action arguments '$($task.Actions.Arguments)'." -Encoding UTF8
         }
     } catch {
-        # Fall through to the non-elevated path if the task is not installed yet.
+        Add-Content -LiteralPath $logPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Elevated task handoff failed: $($_.Exception.Message)" -Encoding UTF8
     }
 }
 

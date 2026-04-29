@@ -1,10 +1,12 @@
 $ErrorActionPreference = 'Stop'
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$workerScriptPath = $PSCommandPath
 $stateRoot = Join-Path $env:LOCALAPPDATA 'RgbIdleWatcher'
 $stateArgPath = Join-Path $stateRoot 'pending-state.txt'
 $msiRecoveryPath = Join-Path $stateRoot 'msi-recovery-request.txt'
 $msiDirectV2RequestPath = Join-Path $stateRoot 'msi-direct-v2-request.txt'
+$reinstallTaskRequestPath = Join-Path $stateRoot 'reinstall-elevated-task-request.txt'
 $applyScript = Join-Path $scriptRoot 'rgb-apply-state.ps1'
 $msiDirectScript = Join-Path $scriptRoot 'msi-mystic-direct.ps1'
 $msiDirectV2Script = Join-Path $scriptRoot 'msi-mystic-direct-v2.ps1'
@@ -13,6 +15,32 @@ $logPath = Join-Path $stateRoot 'watcher.log'
 function Write-Log {
     param([string]$Message)
     Add-Content -LiteralPath $logPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message" -Encoding UTF8
+}
+
+function Invoke-ReinstallTaskIfRequested {
+    if (-not (Test-Path -LiteralPath $reinstallTaskRequestPath)) {
+        return $false
+    }
+
+    Remove-Item -LiteralPath $reinstallTaskRequestPath -Force -ErrorAction SilentlyContinue
+    $taskName = 'RGB Idle Apply Elevated'
+    $argument = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $workerScriptPath
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argument
+    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -Hidden `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+
+    Register-ScheduledTask `
+        -TaskName $taskName `
+        -Action $action `
+        -Principal $principal `
+        -Settings $settings `
+        -Force | Out-Null
+
+    Write-Log "Reinstalled scheduled task '$taskName' with hidden PowerShell window."
+    return $true
 }
 
 function Invoke-MsiRecoveryIfRequested {
@@ -84,6 +112,10 @@ function Invoke-MsiDirectV2State {
     $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $msiDirectV2Script -State $TargetState 2>&1
     $joined = (($output | ForEach-Object { $_.ToString() }) -join ' | ')
     Write-Log "MSI direct v2 state target=$TargetState exit=$LASTEXITCODE output=$joined"
+}
+
+if (Invoke-ReinstallTaskIfRequested) {
+    exit 0
 }
 
 Invoke-MsiRecoveryIfRequested
