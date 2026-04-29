@@ -18,7 +18,6 @@ $msiResultPath = Join-Path $stateRoot 'msi-mystic-result.json'
 $deepCoolScript = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'deepcool-lq094-state.ps1'
 $powerIdleScript = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'power-idle-state.ps1'
 $skydimoScript = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'skydimo-state.ps1'
-$skydimoDirectScript = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'skydimo-config-direct.ps1'
 $msiUiWorkerScript = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'msi-mystic-ui-worker.ps1'
 
 New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
@@ -31,10 +30,9 @@ if (-not $ElevatedWorker -and -not (Test-Path -LiteralPath (Join-Path $stateRoot
         $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
         if ($task) {
             Add-Content -LiteralPath $logPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') MSI Mystic Light user-session UI skipped; elevated direct worker owns MSI control." -Encoding UTF8
-            $skydimoApplyScript = if (Test-Path -LiteralPath $skydimoDirectScript) { $skydimoDirectScript } else { $skydimoScript }
-            if (Test-Path -LiteralPath $skydimoApplyScript) {
+            if (Test-Path -LiteralPath $skydimoScript) {
                 try {
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $skydimoApplyScript -State $State | Out-Null
+                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $skydimoScript -State $State | Out-Null
                 } catch {
                     Add-Content -LiteralPath $logPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Skydimo user-session state skipped: $($_.Exception.Message)" -Encoding UTF8
                 }
@@ -251,14 +249,13 @@ function Set-PowerIdleState {
 function Set-SkydimoState {
     param([string]$TargetState)
 
-    $skydimoApplyScript = if (Test-Path -LiteralPath $skydimoDirectScript) { $skydimoDirectScript } else { $skydimoScript }
-    if (-not (Test-Path -LiteralPath $skydimoApplyScript)) {
+    if (-not (Test-Path -LiteralPath $skydimoScript)) {
         Write-Log 'Skydimo script not found; skipped.'
         return
     }
 
     try {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $skydimoApplyScript -State $TargetState | Out-Null
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $skydimoScript -State $TargetState | Out-Null
     } catch {
         Write-Log "Skydimo state skipped: $($_.Exception.Message)"
     }

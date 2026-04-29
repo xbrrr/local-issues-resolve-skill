@@ -65,11 +65,11 @@ function Start-DeepCoolWithDebugPort {
 
     Get-Process DeepCool -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Seconds 2
-    Start-Process -FilePath $deepCoolExe -ArgumentList "--remote-debugging-port=$debugPort" -WindowStyle Hidden
+    Start-Process -FilePath $deepCoolExe -ArgumentList "--remote-debugging-port=$debugPort" -WindowStyle Minimized
 
     for ($i = 0; $i -lt 20; $i++) {
-        Start-Sleep -Milliseconds 500
         Hide-DeepCoolWindows
+        Start-Sleep -Milliseconds 500
         $page = Get-DeepCoolPage
         if ($page) {
             return $page
