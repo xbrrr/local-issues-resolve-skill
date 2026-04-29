@@ -188,8 +188,7 @@ public static class MsiClickWin32 {
     $y = [int]($rect.Top + ($height * 0.197))
     [void][MsiClickWin32]::SetForegroundWindow($handle)
     Start-Sleep -Milliseconds 300
-
-    function Invoke-MsiSwitchClick {
+    for ($i = 0; $i -lt $clickCount; $i++) {
         [void][MsiClickWin32]::SetCursorPos($x, $y)
         Start-Sleep -Milliseconds 100
         [MsiClickWin32]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
@@ -198,18 +197,7 @@ public static class MsiClickWin32 {
         Start-Sleep -Milliseconds 1500
     }
 
-    for ($i = 0; $i -lt $clickCount; $i++) {
-        Invoke-MsiSwitchClick
-    }
-
     $after = Get-MsiGlobalSwitchState
-    if ($TargetState -eq 'On' -and -not $after) {
-        Write-Log 'MSI UI worker coordinate fallback repair: target=On ended Off after force reapply; clicking once more.'
-        Invoke-MsiSwitchClick
-        $after = Get-MsiGlobalSwitchState
-        $clickCount += 1
-    }
-
     Write-Log "MSI UI worker coordinate fallback: before=$before after=$after target=$TargetState clicks=$clickCount point=$x,$y size=${width}x${height}."
     return ($after -eq $desired)
 }
