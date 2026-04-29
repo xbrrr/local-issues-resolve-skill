@@ -102,6 +102,29 @@ function Test-SessionLocked {
     return ($desktopName -and $desktopName -ne 'Default')
 }
 
+function Get-LatestWinlogonSessionEvent {
+    try {
+        return Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Winlogon/Operational'; Id = 811 } -MaxEvents 1 -ErrorAction Stop
+    } catch {
+        Write-Log "Winlogon session event read failed: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Get-NewWinlogonSessionEvents {
+    param([long]$AfterRecordId)
+
+    try {
+        $events = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Winlogon/Operational'; Id = 811 } -MaxEvents 20 -ErrorAction Stop |
+            Where-Object { $_.RecordId -gt $AfterRecordId } |
+            Sort-Object RecordId
+        return @($events)
+    } catch {
+        Write-Log "Winlogon session event poll failed: $($_.Exception.Message)"
+        return @()
+    }
+}
+
 Write-Log 'RGB Idle Watcher started.'
 $displayIdleSeconds = Get-DisplayIdleSeconds
 if ($displayIdleSeconds -le 0) {
@@ -110,8 +133,10 @@ if ($displayIdleSeconds -le 0) {
 $idleSeconds = [math]::Floor([IdleTime]::GetIdleMilliseconds() / 1000)
 $sessionLocked = Test-SessionLocked
 $lastSessionLocked = $sessionLocked
+$latestWinlogonEvent = Get-LatestWinlogonSessionEvent
+$lastWinlogonRecordId = if ($latestWinlogonEvent) { [long]$latestWinlogonEvent.RecordId } else { 0L }
 $lastState = if ($sessionLocked -or $idleSeconds -ge $displayIdleSeconds) { 'Off' } else { 'On' }
-Write-Log "Startup sync: IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds SessionLocked=$sessionLocked TargetState=$lastState"
+Write-Log "Startup sync: IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds SessionLocked=$sessionLocked WinlogonRecordId=$lastWinlogonRecordId TargetState=$lastState"
 Apply-State -State $lastState -Force
 
 # Some vendor tools are controlled through simulated hotkeys. Those hotkeys reset
@@ -152,6 +177,32 @@ function Invoke-DeepCoolOffGuard {
 
 while ($true) {
     try {
+        $sessionEventTargetState = $null
+        foreach ($event in Get-NewWinlogonSessionEvents -AfterRecordId $lastWinlogonRecordId) {
+            $lastWinlogonRecordId = [long]$event.RecordId
+            $eventType = if ($event.Properties.Count -gt 0) { [int]$event.Properties[0].Value } else { 0 }
+            if ($eventType -eq 4) {
+                Write-Log "Winlogon session lock event: RecordId=$lastWinlogonRecordId"
+                $sessionLocked = $true
+                $lastSessionLocked = $true
+                $sessionEventTargetState = 'Off'
+            } elseif ($eventType -eq 5) {
+                Write-Log "Winlogon session unlock event: RecordId=$lastWinlogonRecordId"
+                $sessionLocked = $false
+                $lastSessionLocked = $false
+                $sessionEventTargetState = 'On'
+            }
+        }
+
+        if ($sessionEventTargetState -and $sessionEventTargetState -ne $lastState) {
+            Write-Log "Session event TargetState=$sessionEventTargetState"
+            Apply-State -State $sessionEventTargetState
+            $lastState = $sessionEventTargetState
+            if ($sessionEventTargetState -eq 'Off') {
+                $ignoreSyntheticWakeUntil = (Get-Date).AddSeconds(30)
+            }
+        }
+
         $displayIdleSeconds = Get-DisplayIdleSeconds
         if ($displayIdleSeconds -le 0) {
             $displayIdleSeconds = 900
@@ -201,6 +252,6 @@ while ($true) {
     if ($lastState -eq 'Off') {
         Start-Sleep -Seconds 1
     } else {
-        Start-Sleep -Seconds 10
+        Start-Sleep -Seconds 1
     }
 }
