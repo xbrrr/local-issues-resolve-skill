@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $applyScript = Join-Path $scriptRoot 'rgb-apply-state.ps1'
+$deepCoolScript = Join-Path $scriptRoot 'deepcool-lq094-state.ps1'
 $stateRoot = Join-Path $env:LOCALAPPDATA 'RgbIdleWatcher'
 $logPath = Join-Path $stateRoot 'watcher.log'
 $statusPath = Join-Path $stateRoot 'state.txt'
@@ -84,6 +85,35 @@ Apply-State -State $lastState -Force
 # wake RGB back up.
 $wakeIdleSeconds = 3
 $ignoreSyntheticWakeUntil = [DateTime]::MinValue
+$lastDeepCoolOffGuard = [DateTime]::MinValue
+$lastHeartbeat = [DateTime]::MinValue
+
+function Invoke-DeepCoolOffGuard {
+    param(
+        [int]$IdleSeconds,
+        [int]$DisplayIdleSeconds
+    )
+
+    if (-not (Test-Path -LiteralPath $deepCoolScript)) {
+        return $false
+    }
+
+    $deepCoolProcess = Get-Process DeepCool -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $deepCoolProcess) {
+        return $false
+    }
+
+    $now = Get-Date
+    if (($now - $lastDeepCoolOffGuard).TotalSeconds -lt 120) {
+        return $false
+    }
+
+    Write-Log "DeepCool idle-off guard: IdleSeconds=$IdleSeconds DisplayTimeout=$DisplayIdleSeconds process=$($deepCoolProcess.Id)."
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $deepCoolScript -State Off | Out-Null
+    Set-Content -LiteralPath $statusPath -Value 'Off' -Encoding ASCII
+    $script:lastDeepCoolOffGuard = $now
+    return $true
+}
 
 while ($true) {
     try {
@@ -110,6 +140,18 @@ while ($true) {
             if ($targetState -eq 'Off') {
                 $ignoreSyntheticWakeUntil = (Get-Date).AddSeconds(30)
             }
+        }
+
+        if ($idleSeconds -ge $displayIdleSeconds) {
+            if (Invoke-DeepCoolOffGuard -IdleSeconds $idleSeconds -DisplayIdleSeconds $displayIdleSeconds) {
+                $lastState = 'Off'
+                $ignoreSyntheticWakeUntil = (Get-Date).AddSeconds(30)
+            }
+        }
+
+        if (((Get-Date) - $lastHeartbeat).TotalMinutes -ge 5) {
+            Write-Log "Watcher heartbeat: IdleSeconds=$idleSeconds DisplayTimeout=$displayIdleSeconds LastState=$lastState"
+            $lastHeartbeat = Get-Date
         }
     } catch {
         Write-Log "Watcher error: $($_.Exception.Message)"
